@@ -33,6 +33,23 @@ def add_after_in_file(filename, search, appendix):
     file2.write("\n".join(newcontent))
     file2.close()
 
+def replace_line_in_file(filename, search, replaced):
+    """ Replace a line containing 'search' by 'replaced' in a file 'filename'. """
+    file = open(filename)
+    content = file.read().split("\n")
+    newcontent = []
+    file.close()
+
+    for line in content:
+        if search in line:
+            newcontent.append(replaced)
+        else:
+            newcontent.append(line)
+
+    file2 = open(filename, 'w+')
+    file2.write("\n".join(newcontent))
+    file2.close()
+
 def ask(name, check=None, default=None):
     """ Asks input to user until input is correct. """
     data = None
@@ -135,7 +152,7 @@ def install_fos_user():
 
 def install_mca_login(oauth):
     """
-        Step 3 (Optionnal) : Installing connection via MyCA
+        Step 3 : Installing connection via MyCA
         * Installing OAuth module via composer
         * Updating .env (versionned) and .env.local (not versionned) with appropriate data.
         * Updating services.yaml to get ENV vars
@@ -158,6 +175,52 @@ def install_mca_login(oauth):
     copyfile(sys.path[0]+'/data/UserController.php', 'src/Controller/UserController.php')
 
     print('[+] Added connection via MyCA.')
+
+def install_webpack_encore():
+    """ Step 4 : Installing Webpack Encore & JQuery """
+    print_title('Adding Webpack')
+    subprocess.call(['composer', 'require', 'symfony/webpack-encore-bundle'], shell=True)
+    subprocess.call(['npm', 'install', '--save-dev', '@symfony/webpack-encore'], shell=True)
+    subprocess.call(['npm', 'install', 'jquery'])
+
+    print('[+] Webpack Encore & JQuery installed.')
+
+def install_adminbsb():
+    """ Step 5 : Installing AdminBSB & its dependences """
+    print_title('Adding AdminBSB Material Design')
+    subprocess.call([
+        'npm', 'install', '-S',
+        'bootstrap@3',
+        'adminbsb-materialdesign',
+        'animate.css',
+        'bootstrap-notify',
+        'bootstrap-select',
+        'node-waves',
+        'popper.js'
+    ])
+
+    copyfile(sys.path[0]+'/data/adminbsb/base.html.twig', 'templates/base.html.twig')
+    copyfile(sys.path[0]+'/data/adminbsb/bootstrap_3_layout.html.twig', 'templates/form/bootstrap_3_layout.html.twig')
+    copyfile(sys.path[0]+'/data/adminbsb/app.js', 'assets/js/app.js')
+    copyfile(sys.path[0]+'/data/adminbsb/vendor.js', 'assets/js/vendor.js')
+    copyfile(sys.path[0]+'/data/adminbsb/app.scss', 'assets/css/app.scss')
+
+    add_after_in_file('webpack.config.js',
+                      ".addEntry('app', './assets/js/app.js')",
+                      "    .createSharedEntry('vendor', './assets/js/vendor.js')")
+
+    replace_line_in_file('webpack.config.js',
+                         '    //.enableSassLoader()',
+                         '    .enableSassLoader()')
+
+    replace_line_in_file('webpack.config.js',
+                         '    //.autoProvidejQuery()',
+                         '    .autoProvidejQuery()')
+
+    subprocess.call(['npm', 'run', 'build'])
+
+    print('[+] Initialized AdminBSB template')
+
 
 
 def check_main_depencies():
@@ -182,27 +245,39 @@ def main():
     check_main_depencies()
 
     project_name = ask('Project name', check_project)
-    #use_encore = ask('Install Webpack Encore (y/n)', check_yn)
-    use_fosuser = ask('Install FosUserBundle (y/n)', check_yn)
+    use_fosuser = ask('Install FosUserBundle (y/n)', check_yn, 'y')
 
     default_dsn = 'root:@127.0.0.1:3306' if os.name != 'posix' else 'root:root@127.0.0.1:3306'
     default_dsn += '/%s' % project_name
     database_dsn = ask('Database DSN', None, default_dsn)
 
     if use_fosuser:
-        use_mca = ask('Add MyCentraleAssos login process (y/n)', check_yn)
+        use_mca = ask('Add MyCentraleAssos login process (y/n)', check_yn, 'y')
 
         if use_mca:
             oauth_base = ask('OAuth Base', None, 'https://my.centrale-assos.fr')
-            oauth_id = ask('OAuth ID')
+            oauth_id = ask('OAuth ID', None, '3_')
             oauth_secret = ask('OAuth Secret')
-    else: use_mca = False
+    else:
+        use_mca = False
+
+    use_encore = ask('Install Webpack Encore (y/n)', check_yn, 'y')
+
+    if use_encore:
+        use_adminbsb = ask('Install AdminBSB theme (y/n)', check_yn, 'y')
+    else:
+        use_adminbsb = False
+
 
     install_symfony(project_name, database_dsn)
     if use_fosuser:
         install_fos_user()
     if use_mca:
         install_mca_login((oauth_base, oauth_id, oauth_secret))
+    if use_encore:
+        install_webpack_encore()
+    if use_adminbsb:
+        install_adminbsb()
 
     subprocess.call(['php', 'bin/console', 'cache:clear', '--env=dev'], shell=True)
 

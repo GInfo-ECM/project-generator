@@ -121,7 +121,12 @@ def install_symfony(project_name, database_dsn):
     add_after_in_file('config/services.yaml', 'parameters:', "\n    locale: 'fr'")
 
     subprocess.call(['php', 'bin/console', 'doctrine:database:create'], shell=True)
-    subprocess.call(['php', 'bin/console', 'make:controller', 'DefaultController'])
+    subprocess.call(['php', 'bin/console', 'make:controller', 'DefaultController'], shell=True)
+    
+    # Changing default page url
+    replace_line_in_file('src/Controller/DefaultController.php',
+        '     * @Route("/default", name="default")',
+        '     * @Route("/", name="default")')
 
 
 def install_fos_user():
@@ -181,7 +186,9 @@ def install_webpack_encore():
     print_title('Adding Webpack')
     subprocess.call(['composer', 'require', 'symfony/webpack-encore-bundle'], shell=True)
     subprocess.call(['npm', 'install', '--save-dev', '@symfony/webpack-encore'], shell=True)
-    subprocess.call(['npm', 'install', 'jquery'])
+    subprocess.call(['npm', 'install', 'jquery'], shell=True)
+    copyfile(sys.path[0]+'/data/webpack.config.js', 'webpack.config.js')
+
 
     print('[+] Webpack Encore & JQuery installed.')
 
@@ -191,23 +198,33 @@ def install_adminbsb():
     subprocess.call([
         'npm', 'install', '-S',
         'bootstrap@3',
+        'sass-loader',
+        'node-sass',
         'adminbsb-materialdesign',
         'animate.css',
         'bootstrap-notify',
         'bootstrap-select',
         'node-waves',
         'popper.js'
-    ])
+    ], shell=True)
 
     copyfile(sys.path[0]+'/data/adminbsb/base.html.twig', 'templates/base.html.twig')
+    os.mkdir('templates/form/')
     copyfile(sys.path[0]+'/data/adminbsb/bootstrap_3_layout.html.twig', 'templates/form/bootstrap_3_layout.html.twig')
     copyfile(sys.path[0]+'/data/adminbsb/app.js', 'assets/js/app.js')
     copyfile(sys.path[0]+'/data/adminbsb/vendor.js', 'assets/js/vendor.js')
     copyfile(sys.path[0]+'/data/adminbsb/app.scss', 'assets/css/app.scss')
 
+    os.mkdir('assets/images/')
+
     add_after_in_file('webpack.config.js',
                       ".addEntry('app', './assets/js/app.js')",
                       "    .createSharedEntry('vendor', './assets/js/vendor.js')")
+
+    # Split entry chunk cannot work with createSharedEntry
+    replace_line_in_file('webpack.config.js',
+                         '    .splitEntryChunks()',
+                         '    //.splitEntryChunks()')
 
     replace_line_in_file('webpack.config.js',
                          '    //.enableSassLoader()',
@@ -217,7 +234,7 @@ def install_adminbsb():
                          '    //.autoProvidejQuery()',
                          '    .autoProvidejQuery()')
 
-    subprocess.call(['npm', 'run', 'build'])
+    subprocess.call(['npm', 'run', 'build'], shell=True)
 
     print('[+] Initialized AdminBSB template')
 
